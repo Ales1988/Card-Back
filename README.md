@@ -1,7 +1,5 @@
 # README
 
-# README
-
 # Player
 
 | Descripciòn                              | Metodo | Ruta                                   | Controller#Action       | Request                                              | params_query                                                                                            | ResponsePositiva    | ResponseNegativa                                                 |
