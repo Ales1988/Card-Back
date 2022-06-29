@@ -2,14 +2,14 @@ class GamesController < ApplicationController
 
  #callback
     
- before_action :check_token, only:[ :create, :join, :draft, :play] #check_token me permite recuperar el jugador que está ejecutando la request
- before_action :set_game, only:[ :show, :join, :draft, :play]
- before_action :check_turn, only:[:draft, :play] #Verifica que sea el turno del jugador que envia la request
+ before_action :check_token, only:[ :create, :join, :take, :play] #check_token me permite recuperar el jugador que está ejecutando la request
+ before_action :set_game, only:[ :show, :join, :take, :play]
+ before_action :check_turn, only:[:take, :play] #Verifica que sea el turno del jugador que envia la request
 
  #actions
  #Este action me muestra todos los games existentes si no agrego parámetros de búsqueda.
- #También puedo usarlo para mostrar todos los juegos disponibles para el join si agrego el parámetro de solicitud search= . Sin nada porque 
- #los games disponibles son aquellos sin player2_id
+ #También puedo usarlo para mostrar todos los juegos disponibles para el join si agrego el parámetro de solicitud search=nil.
+ #"nil" porque los games disponibles son aquellos sin player2_id
  #Ej. http://127.0.0.1:3000/games?search=nil
  def index
      if params[:search]=="nil"
@@ -34,66 +34,72 @@ class GamesController < ApplicationController
      game_save
  end
 
- #action para asignar el segundo jugador a un game
+ #action para asignar el segundo jugador a un game y inicializar el game
  def join
      @game.player2 = @player #player lo recupero en el before_action check_token y game lo recupero con set_game
      @game.active_player = @game.player1_id #El primer player a jugar va a ser lo que creò el game
-     @game.first_player = @game.player1_id #El jugador que creò el game a a ser el first player de la primera ronda. La diferencia con active_player es que durante una ronda, el active_player va a cambiar.
+     @game.turns.create(turn_number: 1, first_player: @game.player1, second_player: @game.player2) #creo una nuova instancia de turn
      @game.shuffle_deck #Se mezcla la baraja de cartas
      @game.assign_cards #Se da la primera mano de cartas
      game_save
  end
 
- #Action para que permite a un jugador de robar una carta
- def draft
+ #Action  que permite a un jugador de sacar una carta
+ def take
     return render status: 402, json: {message: "¡Ya tienes 3 cartas!"} if @player.id == @game.player1_id && @game.cards_hand_p1.length()>2
     return render status: 402, json: {message: "¡Ya tienes 3 cartas!"} if @player.id == @game.player2_id && @game.cards_hand_p2.length()>2
     return render status: 402, json: {message: "¡Se acabó el juego!"} if @game.cards_deck.length<1
     
+    #Si el jugador que envia la request es el jugador 1
     if @player.id == @game.player1_id
-        @game.cards_hand_p1.append(@game.cards_deck.first) #doy la primera carta de la baraja al jugador 1
-        @game.cards_deck.shift()                          #saco la primera carta de la baraja
+        @game.cards_hand_p1.append(@game.cards_deck.shift()) #doy la primera carta de la baraja al jugador 1 y saco la primera carta de la baraja
     end
+    #Si el jugador que envia la request es el jugador 2
     if @player.id == @game.player2_id
-        @game.cards_hand_p2.append(@game.cards_deck.first) #doy la primera carta de la baraja al jugador 2
-        @game.cards_deck.shift()                          #saco la primera carta de la baraja
+        @game.cards_hand_p2.append(@game.cards_deck.shift()) #doy la primera carta de la baraja al jugador 2 y saco la primera carta de la baraja
     end
 
     game_save
  end
 
- #Action que permite de jugar una carta, recive params card_name
+ #Action que permite de jugar una ronda, recive params card_name
  def play
-    return render status: 403, json: {message: "¡Ya has jugado una carta!"} if @player.id == @game.player1_id && @game.cards_played[0]!=""
-    return render status: 403, json: {message: "¡Ya has jugado una carta!"} if @player.id == @game.player2_id && @game.cards_played[1]!=""
     
-    #Si està jugando el player1
-    if (@player.id==@game.player1_id)
-    @game.cards_played[0]=params[:card_name] #Pongo la carta jugada en la mesa
-    @game.cards_hand_p1.delete(params[:card_name]) #Saco la carta jugada de la mano del jugador
-    end
-    
-    #Si està jugando el player2
-    if (@player.id==@game.player2_id)
-        @game.cards_played[1]=params[:card_name] #Pongo la carta jugada en la mesa
-        @game.cards_hand_p2.delete(params[:card_name]) #Saco la carta jugada de la mano del jugador
-    end
+    #Metodo que pone la carta jugada en la mesa
+    @game.play_card(@player.id,params[:card_name])
 
     #Si ambos jugaron, es decir termina una ronda
-    if (@game.cards_played[0]!="" && @game.cards_played[1]!="")#significa que ambos han ya jugado
+    if (@game.turns.last.first_card.present? && @game.turns.last.second_card.present?)#significa que ambos han ya jugado 
         
 
-        #Como termina una ronda, calculo los puntos
-        @game.points()
-        @game.cards_played[0]=""
-        @game.cards_played[1]="" #quito ambas cartas de la mesa para prepararme a la proxima ronda
+       #Averiguo cual jugador ganò la ronda pasando como argumento las dos cartas jugadas y el first y second player
+       player_winner = Game.player_win(@game.turns.last.first_card, @game.turns.last.second_card, @game.turns.last.first_player, @game.turns.last.second_player)
+        
+       #Calculo cuantos puntos se ganan en esta ronda
+       points_turn = Game.calculate_points(@game.turns.last.first_card, @game.turns.last.second_card)
+        
+       #Asigno los puntos de la ronda al ganador
+        if(player_winner==@game.player1)#Si el ganador es el player 1
+            @game.points_player1 = @game.points_player1 + points_turn #Asigno los puntos de la ronda al player 1
+            @game.active_player=@game.player1_id #Si ganò el player 1, el proximo a jugar es el player 1
+
+            #Creo el nuevo turno. Como ganò el player 1, el first_player va a ser el player 1
+            @game.turns.create(turn_number: @game.turns.last.turn_number+1, first_player: @game.player1, second_player: @game.player2)
+
+        else#Si el ganador es el player 2
+            @game.points_player2 = @game.points_player2 + points_turn #Asigno los puntos de la ronda al player 2
+            @game.active_player=@game.player2_id #Si ganò el player 2, el proximo a jugar es el player 2
+
+            #Creo el nuevo turno. Como ganò el player 2, el first_player va a ser el player 2
+            @game.turns.create(turn_number: @game.turns.last.turn_number+1, first_player: @game.player2, second_player: @game.player1)
+        end
     
 
     else #Sino, la ronda no he terminada: solo un jugador jugò. Tengo que cambiar solo  el active_player para hacer jugar el jugador que no jugò
         if (@player.id==@game.player1_id) #paso el turno al otro jugador, el first_player no cambia, porque se llega a esta linea de codigo significa que la ronda no terminò
             @game.active_player=@game.player2_id
         else
-                @game.active_player=@game.player1_id
+            @game.active_player=@game.player1_id
         end
     end
 

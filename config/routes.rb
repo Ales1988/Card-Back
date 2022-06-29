@@ -14,9 +14,12 @@ Rails.application.routes.draw do
 
     member do
       put :join
-      put :draft
+      put :take
       put :play
     end
   end
+
+  resources :turns, except: [:destroy, :new, :edit]
+  
 
 end

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.0].define(version: 2022_06_20_143139) do
+ActiveRecord::Schema[7.0].define(version: 2022_06_25_203720) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -18,14 +18,10 @@ ActiveRecord::Schema[7.0].define(version: 2022_06_20_143139) do
     t.bigint "player1_id"
     t.bigint "player2_id"
     t.string "game_name"
-    t.text "cards_deck", default: ["q0", "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "c0", "c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9", "f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "p0", "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9"], array: true
+    t.text "cards_deck", default: ["diamante1", "diamante3", "diamante_rey", "diamante_reina", "diamante_jota", "diamante7", "diamante6", "diamante5", "diamante4", "diamante2", "trebole1", "trebole3", "trebole_rey", "trebole_reina", "trebole_jota", "trebole7", "trebole6", "trebole5", "trebole4", "trebole2", "corazone1", "corazone3", "corazone_rey", "corazone_reina", "corazone_jota", "corazone7", "corazone6", "corazone5", "corazone4", "corazone2", "pica1", "pica3", "pica_rey", "pica_reina", "pica_jota", "pica7", "pica6", "pica5", "pica4", "pica2"], array: true
     t.text "cards_hand_p1", default: [], array: true
     t.text "cards_hand_p2", default: [], array: true
-    t.text "cards_won_p1", default: [], array: true
-    t.text "cards_won_p2", default: [], array: true
-    t.text "cards_played", default: ["", ""], array: true
     t.integer "active_player"
-    t.integer "first_player"
     t.integer "points_player1", default: 0
     t.integer "points_player2", default: 0
     t.datetime "created_at", null: false
@@ -40,6 +36,20 @@ ActiveRecord::Schema[7.0].define(version: 2022_06_20_143139) do
     t.string "token"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+  end
+
+  create_table "turns", force: :cascade do |t|
+    t.bigint "game_id"
+    t.integer "turn_number"
+    t.bigint "first_player_id"
+    t.bigint "second_player_id"
+    t.string "first_card"
+    t.string "second_card"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["first_player_id"], name: "index_turns_on_first_player_id"
+    t.index ["game_id"], name: "index_turns_on_game_id"
+    t.index ["second_player_id"], name: "index_turns_on_second_player_id"
   end
 
 end
